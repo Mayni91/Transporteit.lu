@@ -17,8 +17,12 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import java.util.ArrayList;
 
 public class MapActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
 
@@ -29,6 +33,9 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
     private final String TAG = "MapActivity";
 
+
+    private ArrayList<Marker> allBusMarkers;
+    private ArrayList<Marker> allVelohMarkers;
 
 
     @Override
@@ -41,6 +48,10 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         mapFragment.getMapAsync(this);
 
         client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
+
+        allBusMarkers = new ArrayList<>();
+        allVelohMarkers = new ArrayList<>();
+
     }
 
 
@@ -100,9 +111,11 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         enableMyLocation();
 
         // Add a marker in Sydney and move the camera
-        LatLng sydney = new LatLng(49.611622,6.131935);
-        mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Luxembourg"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
+        LatLng coordinateLuxembourg = new LatLng(49.611622,6.131935);
+        addBusMarkerFromLocation(coordinateLuxembourg, "Luxembourg", "Some random description");
+
+        LatLng coordinateLuxembourgVeloh = new LatLng(49.611622,6.134950);
+        addVelohMarkerFromLocation(coordinateLuxembourgVeloh, "Luxembourg", "Some random description");
     }
 
     private void enableMyLocation() {
@@ -158,4 +171,27 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         PermissionUtils.PermissionDeniedDialog
                 .newInstance(true).show(getSupportFragmentManager(), "dialog");
     }
+
+
+    private void addBusMarkerFromLocation(LatLng coordinates, String title, String description) {
+        Marker marker = mMap.addMarker(new MarkerOptions().position(coordinates).alpha(0.7f));
+        marker = setMarkerTitleAndSnippet(marker, title, description);
+        allBusMarkers.add(marker);
+    }
+
+
+    private void addVelohMarkerFromLocation(LatLng coordinates, String title, String description) {
+        Marker marker = mMap.addMarker(new MarkerOptions().position(coordinates).alpha(0.7f));
+        marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
+        marker = setMarkerTitleAndSnippet(marker, title, description);
+        allVelohMarkers.add(marker);
+    }
+
+    private Marker setMarkerTitleAndSnippet(Marker marker, String title, String description){
+        marker.setTitle(title);
+        marker.setSnippet(description);
+        return marker;
+    }
+
+
 }
