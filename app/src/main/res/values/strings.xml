@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Transporteit.lu</string>
     <string name="title_activity_map">Transporteit</string>
+    <string name="location_permission_denied">Location permission denied</string>
+    <string name="permission_required_toast">Permission requires toast</string>
+    <string name="permission_rationale_location">Permission rationale location</string>
 </resources>
