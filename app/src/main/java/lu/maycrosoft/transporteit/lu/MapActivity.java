@@ -1,6 +1,8 @@
 package lu.maycrosoft.transporteit.lu;
 
 import android.Manifest;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.support.annotation.NonNull;
@@ -38,6 +40,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private ArrayList<Marker> allBusMarkers;
     private ArrayList<Marker> allVelohMarkers;
 
+    private SharedPreferences sharedPreferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -166,6 +169,9 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             showMissingPermissionError();
             mPermissionDenied = false;
         }
+
+        sharedPreferences = this.getSharedPreferences(
+                getString(R.string.preference_file_key), Context.MODE_PRIVATE);
     }
 
     private void showMissingPermissionError() {
@@ -192,6 +198,40 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         marker.setTitle(title);
         marker.setSnippet(description);
         return marker;
+    }
+
+    private void storeIntValueToSharedPreferences(String key, int value){
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(key, value);
+        editor.apply();
+    }
+
+    private void storeBooleanValueToSharedPreferences(String key, boolean value){
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(key, value);
+        editor.apply();
+    }
+
+    private void storeFloatValueToSharedPreferences(String key, float value){
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putFloat(key, value);
+        editor.apply();
+    }
+
+    private int getIntValueFromSharedPreferences(String key, int defaultValue){
+        SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
+        return sharedPref.getInt(key, defaultValue);
+    }
+
+    private boolean getBooleanValueFromSharedPreferences(String key, boolean defaultValue){
+        SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
+        return sharedPref.getBoolean(key, defaultValue);
+
+    }
+
+    private float getFloatValueFromSharedPreferences(String key, float defaultValue){
+        SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
+        return sharedPref.getFloat(key, defaultValue);
     }
 
 
