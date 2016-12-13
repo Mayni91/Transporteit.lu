@@ -4,12 +4,14 @@ import android.Manifest;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.widget.Toast;
 
 import com.google.android.gms.appindexing.Action;
@@ -20,9 +22,12 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.VisibleRegion;
 
 import java.util.ArrayList;
 
@@ -34,8 +39,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private GoogleApiClient client;
 
     private final String TAG = "MapActivity";
-
-    private String gittest = "gittest";
 
     private ArrayList<Marker> allBusMarkers;
     private ArrayList<Marker> allVelohMarkers;
@@ -118,8 +121,31 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         LatLng coordinateLuxembourg = new LatLng(49.611622,6.131935);
         addBusMarkerFromLocation(coordinateLuxembourg, "Luxembourg", "Some random description");
 
+
         LatLng coordinateLuxembourgVeloh = new LatLng(49.611622,6.134950);
         addVelohMarkerFromLocation(coordinateLuxembourgVeloh, "Luxembourg", "Some random description");
+
+        mMap.setOnCameraChangeListener(new GoogleMap.OnCameraChangeListener() {
+            @Override
+            public void onCameraChange(CameraPosition cameraPosition) {
+
+                VisibleRegion vr = mMap.getProjection().getVisibleRegion();
+
+                float distance = (float) distanceFromTwoLatLngInKM(vr.latLngBounds.northeast, vr.latLngBounds.southwest);
+                Log.d(TAG, "distanceInMeters " + distance);
+                float alphaValue = (1 - distance / 100f);
+
+                Log.d(TAG, "alphaValue " + alphaValue);
+
+                for (int i = 0; i < allBusMarkers.size(); i++) {
+                    allBusMarkers.get(i).setAlpha(alphaValue);
+                }
+                for (int i = 0; i < allVelohMarkers.size(); i++) {
+                    allVelohMarkers.get(i).setAlpha(alphaValue);
+                }
+            }
+        });
+
     }
 
     private void enableMyLocation() {
@@ -141,6 +167,18 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         // Return false so that we don't consume the event and the default behavior still occurs
         // (the camera animates to the user's current position).
         return false;
+    }
+
+    private void zoomBetweenTwoLatLngs(LatLng latLng1, LatLng latLng2){
+
+        //Boundaries from both LatLngs
+        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+        builder.include(latLng1);
+        builder.include(latLng2);
+        LatLngBounds bounds = builder.build();
+
+        //Animate/Move camera to boundaries - 100 pixels (so 50 more to space at each side)
+        mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
     }
 
 
@@ -199,6 +237,27 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         marker.setSnippet(description);
         return marker;
     }
+
+    private double distanceFromTwoLatLngInKM(LatLng latLng1, LatLng latLng2){
+        double lat1=latLng1.latitude;
+        double lat2=latLng2.latitude;
+        double lon1=latLng1.longitude;
+        double lon2=latLng2.longitude;
+
+        int R = 6373; // radius of the earth in kilometres
+        double lat1rad = Math.toRadians(lat1);
+        double lat2rad = Math.toRadians(lat2);
+        double deltaLat = Math.toRadians(lat2-lat1);
+        double deltaLon = Math.toRadians(lon2-lon1);
+
+        double a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+                Math.cos(lat1rad) * Math.cos(lat2rad) *
+                        Math.sin(deltaLon/2) * Math.sin(deltaLon/2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c;
+    }
+
 
     private void storeIntValueToSharedPreferences(String key, int value){
         SharedPreferences.Editor editor = sharedPreferences.edit();
