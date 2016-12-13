@@ -29,7 +29,12 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.VisibleRegion;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
 
 public class MapActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
 
@@ -39,6 +44,12 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private GoogleApiClient client;
 
     private final String TAG = "MapActivity";
+
+    private String VELOHSTATIONS = "VELOH";
+    private String BUSSTATIONS = "BUS";
+
+    private ArrayList<BusStation> allBusStations;
+    private ArrayList<VelohStation> allVelohStations;
 
     private ArrayList<Marker> allBusMarkers;
     private ArrayList<Marker> allVelohMarkers;
@@ -59,7 +70,42 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         allBusMarkers = new ArrayList<>();
         allVelohMarkers = new ArrayList<>();
 
+
+        JsonURLHandler jsonBusURLHandler = new JsonURLHandler(BUSSTATIONS);
+        JsonURLHandler jsonVelohURLHandler = new JsonURLHandler(VELOHSTATIONS);
+        try {
+
+            String busJSON = jsonBusURLHandler.execute().get();
+            String velohJSON = jsonVelohURLHandler.execute().get();
+
+            allBusStations = getBusStationsFromAsyncTaskResult(busJSON);
+            allVelohStations = getVelohStationsFromAsyncTaskResult(velohJSON);
+
+            Log.i("json", ""+(velohJSON.getBytes().length)/1024);
+            Location loc = new Location("");
+            loc.setLatitude(49.611622);
+            loc.setLongitude(6.131935);
+
+            for (int i=0; i<allVelohStations.size(); i++){
+
+
+                Log.i("json", allVelohStations.get(i).getLatLng().toString());
+                Log.i("json", allVelohStations.get(i).getStationName());
+                //Log.i("json", ""+allBusStations.get(i).getDistanceInMetersFromCurrentLocationToBusStation(loc));
+                //Log.i("json", ""+loc);
+                Log.i("json", "------------------------------------------");
+
+            }
+
+
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
     }
+
 
 
     @Override
@@ -236,6 +282,56 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         marker.setTitle(title);
         marker.setSnippet(description);
         return marker;
+    }
+
+
+    private ArrayList<BusStation> getBusStationsFromAsyncTaskResult(String json){
+        ArrayList<BusStation> busStations = new ArrayList<>();
+        try {
+            JSONObject obj = new JSONObject(json);
+            JSONArray listOfStations = (JSONArray) obj.get("stations");
+            for(int i=0; i<listOfStations.length(); i++){
+
+                JSONObject station = listOfStations.getJSONObject(i);
+
+                BusStation busStation = new BusStation((String)station.get("id"),
+                        (String)station.get("stationName"),
+                        Double.valueOf((String)station.get("lat")),
+                        Double.valueOf((String)station.get("long")));
+                busStations.add(busStation);
+
+            }
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return busStations;
+    }
+
+    private ArrayList<VelohStation> getVelohStationsFromAsyncTaskResult(String json){
+        ArrayList<VelohStation> velohStations = new ArrayList<>();
+        try {
+            JSONObject obj = new JSONObject(json);
+            JSONArray listOfStations = (JSONArray) obj.get("stations");
+            for(int i=0; i<listOfStations.length(); i++){
+
+                JSONObject station = listOfStations.getJSONObject(i);
+
+                VelohStation velohStation = new VelohStation((Integer)station.get("number"),
+                        (String)station.get("name"),
+                        (String)station.get("address"),
+                        (Double) station.get("latitude"),
+                        (Double) station.get("longitude"));
+                velohStations.add(velohStation);
+
+            }
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return velohStations;
     }
 
     private double distanceFromTwoLatLngInKM(LatLng latLng1, LatLng latLng2){
