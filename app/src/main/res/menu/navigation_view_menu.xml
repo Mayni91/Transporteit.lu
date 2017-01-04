@@ -1,0 +1,36 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <group android:checkableBehavior="single">
+
+        <item
+            android:id="@+id/buttonSettings"
+            android:title="Settings" />
+        <item
+            android:id="@+id/buttonFavorites"
+            android:title="Favorites" />
+    </group>
+
+    <item android:title="Enable/Disable Stations">
+        <menu>
+
+            <item
+                android:id="@+id/busSwitchItem"
+                app:actionLayout="@layout/bus_switch"
+                android:title="Bus" />
+            <item
+                android:id="@+id/velohSwitchItem"
+                app:actionLayout="@layout/veloh_switch"
+                android:title="Veloh" />
+        </menu>
+    </item>
+
+    <item android:title="Scan Stations in Radius">
+        <menu>
+            <item
+                android:id="@+id/buttonScan"
+                android:title="Scan" />
+        </menu>
+    </item>
+
+</menu>
