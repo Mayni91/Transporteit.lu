@@ -26,6 +26,7 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -39,6 +40,8 @@ public class JsonURLHandler extends AsyncTask<Void, Void, String> {
     private String velohURL = "https://developer.jcdecaux.com/rest/vls/stations/Luxembourg.json";
 
     private String URL;
+
+    private List<FinishedDownloadListener> listeners = new ArrayList<>();
 
     public JsonURLHandler(String URL){
         this.URL = URL;
@@ -165,7 +168,24 @@ public class JsonURLHandler extends AsyncTask<Void, Void, String> {
     @Override
     protected void onPostExecute(String s) {
         super.onPostExecute(s);
-        Log.i("json", s);
+        Log.i("json", "onPostExecute "+s);
+
+        if(URL.equals("VELOH")){
+            for (FinishedDownloadListener hl : listeners) {
+                hl.finishedVelohDownload();
+            }
+        }
+        else{
+            for (FinishedDownloadListener hl : listeners) {
+                hl.finishedBusDownload();
+            }
+        }
+
 
     }
+
+    public void addListener(FinishedDownloadListener listener) {
+        listeners.add(listener);
+    }
+
 }
