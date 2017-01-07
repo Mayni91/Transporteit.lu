@@ -1,7 +1,9 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <group android:checkableBehavior="single">
+
+    <item android:title="Options">
+    <menu>
 
         <item
             android:id="@+id/buttonSettings"
@@ -9,7 +11,8 @@
         <item
             android:id="@+id/buttonFavorites"
             android:title="Favorites" />
-    </group>
+    </menu>
+    </item>
 
     <item android:title="Enable/Disable Stations">
         <menu>
@@ -25,11 +28,33 @@
         </menu>
     </item>
 
-    <item android:title="Scan Stations in Radius">
+    <item android:title="Desired destination route">
+        <menu>
+
+            <item
+                android:id="@+id/buttonDesiredDestination"
+                android:title="Get route" />
+        </menu>
+    </item>
+
+    <item android:title="Search for Station">
+        <menu>
+
+            <item
+                android:id="@+id/buttonSearch"
+                android:title="Search" />
+        </menu>
+    </item>
+
+    <item android:title="Scan Stations">
         <menu>
             <item
-                android:id="@+id/buttonScan"
-                android:title="Scan" />
+                android:id="@+id/buttonScanInRadius"
+                android:title="Scan in Radius" />
+
+            <item
+                android:id="@+id/buttonScanNearest"
+                android:title="Scan neareast Stations" />
         </menu>
     </item>
 

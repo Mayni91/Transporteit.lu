@@ -1,3 +1,5 @@
+
+
 <android.support.v4.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -5,7 +7,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    tools:openDrawer="start">
+    tools:openDrawer="start"
+    >
+
+
 
     <fragment xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:map="http://schemas.android.com/apk/res-auto"
@@ -14,7 +19,8 @@
         android:name="com.google.android.gms.maps.SupportMapFragment"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        tools:context="lu.maycrosoft.transporteit.lu.MapActivity" />
+        tools:context="lu.maycrosoft.transporteit.lu.MapActivity"
+        />
 
 
 
@@ -29,5 +35,7 @@
         app:menu="@menu/navigation_view_menu"
         android:dividerHeight="0dp"
         android:background="#FFFFFF"/>
+
+
 
 </android.support.v4.widget.DrawerLayout>

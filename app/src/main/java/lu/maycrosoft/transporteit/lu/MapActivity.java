@@ -5,9 +5,12 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.Typeface;
 import android.location.Location;
 import android.net.Uri;
 import android.support.annotation.NonNull;
+import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
@@ -17,16 +20,22 @@ import android.support.v4.view.MenuItemCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.SwitchCompat;
 import android.util.Log;
+import android.view.Display;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -51,6 +60,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -83,6 +95,10 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     SwitchCompat velohSwitch;
 
     private float oldAlphaValue=0;
+    private ArrayList<String> stationNames;
+
+    ArrayList<Marker> favourites;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,6 +114,9 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         allBusMarkers = new ArrayList<>();
         allVelohMarkers = new ArrayList<>();
 
+        favourites = new ArrayList<>();
+
+
         sharedPreferences = this.getSharedPreferences(
                 getString(R.string.preference_file_key), Context.MODE_PRIVATE);
 
@@ -108,6 +127,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         navigationMenu = navigationView.getMenu();
         createAndLoadSwitches();
         addClickListenerToMenuItems();
+
 
     }
 
@@ -128,6 +148,24 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         } catch (ExecutionException e) {
             e.printStackTrace();
         }
+        new Thread(new Runnable() {
+            public void run() {
+                sortBusStationsByName();
+            }
+        }).start();
+
+    }
+
+    private void sortBusStationsByName() {
+        Collections.sort(allBusStations, new Comparator() {
+            @Override
+            public int compare(Object softDrinkOne, Object softDrinkTwo) {
+                //use instanceof to verify the references are indeed of the type in question
+                return ((BusStation)softDrinkOne).getStationName()
+                        .compareTo(((BusStation)softDrinkTwo).getStationName());
+            }
+        });
+
     }
 
     private void createAndLoadSwitches() {
@@ -227,8 +265,12 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 /*TODO proportional alphavalue and going to 0 when 10 km and 1 when 0.5 km
                     check for the bachelor these and or trier height.
                    */
-                float alphaValue = Math.max(0,Math.min(1,(1 - distance / 50f)));
+                //float alphaValue = Math.max(0,Math.min(1,(1 - distance / 50f)));
 
+                float alphaValue = 1 - map(distance, 0.5f, 50.0f, 0.0f, 1.0f);
+
+
+                Log.d(TAG, "alphaValue " + alphaValue);
                 if(oldAlphaValue!=alphaValue) {
                     if (Math.abs(oldAlphaValue  - alphaValue ) > 0.1 || alphaValue == 1 || alphaValue == 0) {
                         oldAlphaValue = alphaValue;
@@ -236,6 +278,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
                         for (int i = 0; i < allBusMarkers.size(); i++) {
                             allBusMarkers.get(i).setAlpha(alphaValue);
+
                         }
                         for (int i = 0; i < allVelohMarkers.size(); i++) {
                             allVelohMarkers.get(i).setAlpha(alphaValue);
@@ -245,6 +288,147 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             }
         });
 
+        mMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
+
+            @Override
+            public View getInfoWindow(Marker arg0) {
+                return null;
+            }
+
+            @Override
+            public View getInfoContents(Marker marker) {
+
+                View v = getLayoutInflater().inflate(R.layout.marker_snippet, null);
+
+                TextView title = (TextView) v.findViewById(R.id.title);
+                title.setTextColor(Color.BLACK);
+                title.setTypeface(null, Typeface.BOLD);
+                title.setText(marker.getTitle());
+
+                TextView info = (TextView) v.findViewById(R.id.info);
+
+                if (allBusMarkers.contains(marker)){
+                    String s = getBusInformationFromMarker(marker);
+                    int counter = 0;
+                    for( int i=0; i<s.length(); i++ ) {
+                        if( s.charAt(i) == '\n' ) {
+                            counter++;
+                        }
+                    }
+                    if (counter > 32){
+                        info.setTextSize(6f);
+                    }
+
+                    info.setText(getBusInformationFromMarker(marker));
+                }
+                else{
+                    if (allVelohMarkers.contains(marker)){
+                        info.setText(getVelohInformationFromMarker(marker));
+                    }
+                }
+
+
+                return v;
+            }
+        });
+
+        mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener()
+        {
+
+            @Override
+            public boolean onMarkerClick(Marker marker) {
+                VisibleRegion vr = mMap.getProjection().getVisibleRegion();
+                float distance = (float) distanceFromTwoLatLngInKM(vr.latLngBounds.northeast, vr.latLngBounds.southwest);
+
+                // marker only clickable when close as 10km
+                if(marker != null && distance < 10){
+                    marker.showInfoWindow();
+                    int zoom = (int)mMap.getCameraPosition().zoom;
+                    mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(marker.getPosition().latitude, marker.getPosition().longitude), zoom), 2000, null);
+                }
+
+                return true;
+            }
+
+        });
+
+
+        mMap.setOnInfoWindowLongClickListener(new GoogleMap.OnInfoWindowLongClickListener() {
+
+            @Override
+            public void onInfoWindowLongClick(Marker marker) {
+
+                if (!favourites.contains(marker)){
+                    marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+                    favourites.add(marker);
+
+                }
+                else{
+                    marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+                    favourites.remove(marker);
+                }
+
+            }
+        });
+
+
+    }
+
+    private float map(float num, float input_min, float input_max, float output_min, float output_max) {
+        if (num < input_min){
+            num = input_min;
+        }else{
+            if (num > input_max){
+                num = input_max;
+            }
+        }
+        return ((num - input_min) * (output_max - output_min) / (input_max - input_min)) + output_min;
+    }
+
+    private String getVelohInformationFromMarker(Marker marker){
+        String velohinfo = "";
+        for (int i=0; i<allVelohStations.size(); i++){
+            if (allVelohStations.get(i).getStationName().equals(marker.getTitle())){
+                String velohName = allVelohStations.get(i).getStationName();
+                String address = "Address: " + allVelohStations.get(i).getAddress();
+                velohinfo = address + "\n";
+                break;
+            }
+        }
+
+        return velohinfo;
+    }
+
+    private String getBusInformationFromMarker(Marker marker){
+        ArrayList<BusInformation> busInformations = new ArrayList<>();
+        String busInfos = "";
+        for(int i=0; i< allBusMarkers.size(); i++){
+            if (allBusStations.get(i).getStationName().equals(marker.getTitle())){
+                Log.i("MARKER CLICKED", marker.getTitle());
+
+                busInformations = allBusStations.get(i).getBusInformations();
+
+                for (int j=0; j<busInformations.size(); j++){
+                    String busline = busInformations.get(j).getBusLine();
+                    String times = "";
+                    for (int k=0; k<busInformations.get(j).getTimes().size(); k++){
+                        if(k < 4) {
+                            times += busInformations.get(j).getTimes().get(k) + " ";
+                        }
+                        else break;
+                    }
+
+                    String stationName = busInformations.get(j).getDestinationStationName();
+
+                    String busInformation = "Busline: " + busline + "\n" + "Departure Times: " + times + "\n" + "Destination: " + stationName + "\n\n";
+
+                    busInfos += busInformation;
+                }
+                marker.setSnippet(busInfos);
+
+            }
+        }
+        return busInfos;
     }
 
     private void enableMyLocation() {
@@ -515,16 +699,57 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return velohStationsInRadius;
     }
 
-    private ArrayList<BusStation> findClosestBusStation(LatLng currentLocation, int amount){
-        ArrayList<BusStation> tempBusStations = new ArrayList<>();
-        tempBusStations = sortBusStationsByDistance(currentLocation, allBusStations);
+    private ArrayList<BusStation> findClosestBusStations(LatLng currentLocation, int amount){
+        double distance1, distance2;
+        ArrayList<BusStation> tempBusStations = allBusStations;
         ArrayList<BusStation> closestBusStations = new ArrayList<>();
-
+        ArrayList<Double> distances = new ArrayList<>();
+        //calculate the first (amount) of distances
         for(int i = 0 ; i < amount; i++){
-            closestBusStations.add(closestBusStations.get(i));
+            distance1 = distanceFromTwoLatLngInKM(tempBusStations.get(i).getLatLng(),currentLocation);
+            distances.add(distance1);
+            closestBusStations.add(tempBusStations.get(i));
+        }
+
+        //sort the distances and the corresponding busstations
+        for(int i=1; i<distances.size(); i++) {
+            for(int j=0; j<distances.size()-i; j++) {
+                distance1 = distances.get(j);
+                distance2 = distances.get(j+1);
+                if(distance1>distance2) {
+                    Collections.swap(distances, i, j);
+                    Collections.swap(closestBusStations, i, j);
+                }
+            }
+        }
+
+        for(int i = amount; i<tempBusStations.size();i++){
+            distance2 = distanceFromTwoLatLngInKM(tempBusStations.get(i).getLatLng(),currentLocation);
+            for(int j=0; j<distances.size(); j++) {
+                distance1 = distances.get(j);
+                if(distance1>distance2) {
+                    distances.add(j,distance2);
+                    closestBusStations.add(j,tempBusStations.get(i));
+                    distances.remove(amount);
+                    closestBusStations.remove(amount);
+                    break;
+                }
+            }
         }
 
         return closestBusStations;
+    }
+
+    private ArrayList<VelohStation> findClosestVelohStations(LatLng currentLocation, int amount){
+        ArrayList<VelohStation> tempVelohStations;
+        tempVelohStations = sortVelohStationsByDistance(currentLocation, allVelohStations);
+        ArrayList<VelohStation> closestVelohStations = new ArrayList<>();
+
+        for(int i = 0 ; i < amount; i++){
+            closestVelohStations.add(tempVelohStations.get(i));
+        }
+
+        return closestVelohStations;
     }
 
     private ArrayList<BusStation> sortBusStationsByDistance(LatLng currentLocation, ArrayList<BusStation> busStations){
@@ -585,7 +810,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
 
 
-    private void showScanAlertDialog(){
+    private void showScanInRadiusAlertDialog(){
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         LinearLayout linear=new LinearLayout(this);
         linear.setOrientation(LinearLayout.VERTICAL);
@@ -631,7 +856,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         });
         builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int id) {
-                // TODO do nothing actually
             }
         });
 
@@ -645,16 +869,338 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     }
 
 
+
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
 
         switch (item.getItemId()){
-            case R.id.buttonScan:
-                Log.d(TAG, "TEST 1");
-                showScanAlertDialog();
+            case R.id.buttonScanInRadius:
+                Log.d(TAG, "Scan in radius");
+                showScanInRadiusAlertDialog();
+                break;
+            case R.id.buttonScanNearest:
+                Log.d(TAG, "Scan nearest");
+                showScanNearestAlertDialog();
+                break;
+            case R.id.buttonSearch:
+                showSearchAlertDialog();
+                break;
+            case R.id.buttonFavorites:
+                showFavouritesDialog();
                 break;
         }
         return true;
+    }
+
+
+
+    private void showScanNearestAlertDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout linear=new LinearLayout(this);
+        linear.setOrientation(LinearLayout.VERTICAL);
+        final TextView textViewBus = new TextView(this);
+        textViewBus.setTextSize(25);
+        textViewBus.setText("5 Bus Stations");
+        textViewBus.setGravity(Gravity.CENTER);
+        linear.addView(textViewBus);
+        final SeekBar sliderBus = new SeekBar(this);
+        sliderBus.setProgress(50);
+        sliderBus.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                textViewBus.setText("" + (progress+5)/10 +" Bus Stations");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+        linear.addView(sliderBus);
+
+        final TextView textViewVeloh = new TextView(this);
+        textViewVeloh.setTextSize(25);
+        textViewVeloh.setText("3 Veloh Stations");
+        textViewVeloh.setGravity(Gravity.CENTER);
+        linear.addView(textViewVeloh);
+        final SeekBar sliderVeloh = new SeekBar(this);
+        sliderVeloh.setProgress(50);
+        sliderVeloh.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                textViewVeloh.setText("" + (progress+10)/20 +" Veloh Stations");
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+        linear.addView(sliderVeloh);
+        builder.setView(linear);
+
+        builder.setView(linear);
+        builder.setTitle("Scan nearest Stations");
+        builder.setPositiveButton("Scan", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                if(mMap.isMyLocationEnabled()){
+                    setAllBusMarkerColors();
+                    setAllVelohMarkerColors();
+                    LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude());
+                    int amountBusStations = (sliderBus.getProgress()+5)/10;
+                    int amountVelohStations = (sliderVeloh.getProgress()+10)/20;
+                    if(amountBusStations + amountVelohStations == 0){
+                        return;
+                    }
+                    ArrayList<BusStation> foundBusStations = findClosestBusStations(currentLocation, amountBusStations);
+                    Log.d(TAG, "amount of busstations found : " +foundBusStations.size());
+
+                    ArrayList<VelohStation> foundVelohStations = findClosestVelohStations(currentLocation, amountVelohStations);
+                    Log.d(TAG, "amount of velohStations found : " +foundVelohStations.size());
+
+                    ArrayList<LatLng> latLngs  = new ArrayList<LatLng>();
+                    for (int i = 0; i < amountBusStations; i++){
+                        latLngs.add(foundBusStations.get(i).getLatLng());
+                    }
+                    for (int i = 0; i < amountVelohStations; i++){
+                        latLngs.add(foundVelohStations.get(i).getLatLng());
+                    }
+                    latLngs.add(currentLocation);
+                    ArrayList<LatLng> borders = getBordersOfLatLngs(latLngs);
+                    //TODO Show the markers of those busStations/velohStations in a better way ( other color for example)
+                    zoomBetweenTwoLatLngs(borders.get(0), borders.get(1));
+
+                    setMarkerColorsOfBusStations(foundBusStations);
+                    setMarkerColorsOfVelohStations(foundVelohStations);
+                }
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+            }
+        });
+
+        builder.show();
+
+    }
+
+
+    private ArrayList<LatLng> getBordersOfLatLngs(ArrayList<LatLng> latLngs){
+        double west, north, east, south;
+        west = east = latLngs.get(0).longitude;
+        north = south = latLngs.get(0).latitude;
+        for (int i = 1; i < latLngs.size(); i++){
+            west = Math.min(west, latLngs.get(i).longitude);
+            east = Math.max(east, latLngs.get(i).longitude);
+            north = Math.min(north, latLngs.get(i).latitude);
+            south = Math.max(south, latLngs.get(i).latitude);
+        }
+
+        ArrayList<LatLng> result = new ArrayList<>();
+        result.add(new LatLng(north,west));
+        result.add(new LatLng(south,east));
+        return result;
+
+    }
+
+    private void setAllBusMarkerColors(){
+        for (Marker marker: allBusMarkers){
+            marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+        }
+    }
+
+    private void setAllVelohMarkerColors(){
+        for (Marker marker: allVelohMarkers){
+            marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
+        }
+    }
+
+    private void setMarkerColorsOfBusStations(ArrayList<BusStation> busStations){
+        Marker marker;
+        for (BusStation busStation : busStations){
+            marker = getMarkerOfBusStation(busStation);
+            if(marker!=null){
+                marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW));
+                marker.setAlpha(1);
+            }
+        }
+    }
+
+    private Marker getMarkerOfBusStation(BusStation busStation){
+        for (Marker marker: allBusMarkers){
+            if(marker.getPosition().equals(busStation.getLatLng())){
+                return marker;
+            }
+        }
+        return null;
+    }
+
+    private void setMarkerColorsOfVelohStations(ArrayList<VelohStation> velohStations){
+        for (VelohStation busStation : velohStations){
+            for (Marker marker: allVelohMarkers){
+                if(marker.getPosition().equals(busStation.getLatLng())){
+                    marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+                    marker.setAlpha(1);
+                }
+            }
+        }
+    }
+
+
+    private void showSearchAlertDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        LinearLayout linear = new LinearLayout(this);
+        linear.setOrientation(LinearLayout.VERTICAL);
+        final AutoCompleteTextView textView = new AutoCompleteTextView(this);
+        textView.setTextSize(20);
+        textView.setHint("City, Street");
+        textView.setGravity(Gravity.CENTER);
+
+        ArrayList<String> stationNames = getStationNames();
+
+
+        ArrayAdapter adapter = new
+                ArrayAdapter(this, android.R.layout.simple_list_item_1, stationNames);
+
+        textView.setAdapter(adapter);
+        textView.setThreshold(1);
+        textView.setDropDownHeight(800);
+
+        linear.addView(textView);
+        builder.setView(linear);
+        builder.setTitle("Search for Station");
+        builder.setPositiveButton("Search", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude());
+                //TODO zoom to this location
+                BusStation searchedBusStation  = getBusStationWithStationName(textView.getEditableText().toString());
+                Marker busMarker = getMarkerOfBusStation(searchedBusStation);
+                busMarker.showInfoWindow();
+                zoomBetweenTwoLatLngs(currentLocation, searchedBusStation.getLatLng());
+
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+            }
+        });
+
+
+        AlertDialog dialog = builder.create();
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        WindowManager.LayoutParams wmlp = dialog.getWindow().getAttributes();
+
+        wmlp.gravity = Gravity.TOP | Gravity.LEFT;
+        wmlp.y = 100;   //y position
+        dialog.getWindow().setAttributes(wmlp);
+        dialog.show();
+    }
+
+
+    private ArrayList<String> getStationNames() {
+        ArrayList<String> stationNames = new ArrayList<>();
+
+        for(BusStation busStation: allBusStations){
+            stationNames.add(busStation.getStationName());
+        }
+
+        return stationNames;
+    }
+
+
+    private BusStation getBusStationWithStationName(String stationName){
+        for (BusStation busStation : allBusStations){
+            if (busStation.getStationName().equals(stationName)){
+                return busStation;
+            }
+        }
+        return null;
+    }
+
+
+
+    private void showFavouritesDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        AlertDialog dialog;
+        if (favourites.size() == 0){
+            TextView textView = new TextView(this);
+            textView.setText("You have no favourites!");
+            textView.setTextSize(15);
+            builder.setView(textView);
+            builder.setTitle("Favourites");
+            builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int id) {
+                }
+            });
+             dialog = builder.create();
+        }else {
+
+            LinearLayout linear = new LinearLayout(this);
+            linear.setOrientation(LinearLayout.VERTICAL);
+            final Spinner spinner = new Spinner(this);
+            spinner.setGravity(Gravity.CENTER);
+
+
+            ArrayList<String> stationNames = getStationNamesOfMarkers(favourites);
+
+
+            ArrayAdapter adapter = new
+                    ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, stationNames);
+
+            spinner.setAdapter(adapter);
+
+            linear.addView(spinner);
+            builder.setView(linear);
+            builder.setTitle("Favourites");
+            builder.setPositiveButton("Search", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int id) {
+                    LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(), mMap.getMyLocation().getLongitude());
+                    //TODO zoom to this location
+                    BusStation searchedBusStation = getBusStationWithStationName(spinner.getSelectedItem().toString());
+                    Marker busMarker = getMarkerOfBusStation(searchedBusStation);
+                    busMarker.showInfoWindow();
+                    zoomBetweenTwoLatLngs(currentLocation, searchedBusStation.getLatLng());
+
+                }
+            });
+            builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int id) {
+                }
+            });
+
+
+            dialog = builder.create();
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            WindowManager.LayoutParams wmlp = dialog.getWindow().getAttributes();
+
+            wmlp.gravity = Gravity.TOP | Gravity.LEFT;
+            wmlp.y = 100;   //y position
+            dialog.getWindow().setAttributes(wmlp);
+        }
+        dialog.show();
+
+    }
+
+
+    private ArrayList<String> getStationNamesOfMarkers(ArrayList<Marker> markers){
+        ArrayList<String> stationNames = new ArrayList<>();
+
+        for(Marker marker: markers){
+            stationNames.add(marker.getTitle());
+        }
+        Collections.sort(stationNames);
+        return stationNames;
     }
 
 }
