@@ -7,7 +7,7 @@ import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
 
 /**
- * Created by Nic on 18/12/2016.
+ * This class is the parent class of the veloh and bus station classes, since both classes share a lot of common properties
  */
 
 public abstract class Station {

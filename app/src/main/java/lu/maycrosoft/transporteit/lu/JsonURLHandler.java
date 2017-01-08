@@ -30,7 +30,8 @@ import java.util.List;
 import java.util.Scanner;
 
 /**
- * Created by joemayer on 23/11/2016.
+ * Class which handles all the initial loading of the veloh- and busstations, it extends to AsyncTask because every network connection should
+ * be done this way, such that the device does not completely block and rests responsive.
  */
 
 public class JsonURLHandler extends AsyncTask<Void, Void, String> {

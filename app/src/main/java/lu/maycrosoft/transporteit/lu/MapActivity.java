@@ -5,7 +5,10 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.location.Location;
 import android.net.Uri;
@@ -17,6 +20,7 @@ import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.view.MenuItemCompat;
+import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.SwitchCompat;
 import android.util.Log;
@@ -49,6 +53,8 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -66,7 +72,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-public class MapActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener, NavigationView.OnNavigationItemSelectedListener, ActivityCompat.OnRequestPermissionsResultCallback, FinishedDownloadListener ,CompoundButton.OnCheckedChangeListener{
+public class MapActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMapLoadedCallback,GoogleMap.OnMyLocationButtonClickListener, NavigationView.OnNavigationItemSelectedListener, ActivityCompat.OnRequestPermissionsResultCallback, FinishedDownloadListener ,CompoundButton.OnCheckedChangeListener{
 
     private GoogleMap mMap;
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
@@ -81,10 +87,13 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
     private ArrayList<BusStation> allBusStations;
     private ArrayList<VelohStation> allVelohStations;
 
+    private ArrayList<Marker> searchedMarkers;
+
     private ArrayList<Marker> allBusMarkers;
     private ArrayList<Marker> allVelohMarkers;
 
     private SharedPreferences sharedPreferences;
+    private Circle circle;
 
     private final String showBusStationPreference = "showBusStationPreference";
     private final String showVelohStationPreference = "showVelohStationPreference";
@@ -115,7 +124,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         allVelohMarkers = new ArrayList<>();
 
         favourites = new ArrayList<>();
-
+        searchedMarkers = new ArrayList<>();
 
         sharedPreferences = this.getSharedPreferences(
                 getString(R.string.preference_file_key), Context.MODE_PRIVATE);
@@ -126,11 +135,10 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         navigationView.setNavigationItemSelectedListener(this);
         navigationMenu = navigationView.getMenu();
         createAndLoadSwitches();
-        addClickListenerToMenuItems();
-
-
     }
 
+    // This method handles the loading of all stations with the JsonURLHandler to get the JSON-String
+    // Next we call here the both methods for the buses and velohs to get he actual stations from this JSON-String
     private void loadBusAndVelohsFromURL() {
         JsonURLHandler jsonBusURLHandler = new JsonURLHandler(BUSSTATIONS);
         JsonURLHandler jsonVelohURLHandler = new JsonURLHandler(VELOHSTATIONS);
@@ -138,7 +146,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         jsonBusURLHandler.addListener(this);
         jsonVelohURLHandler.addListener(this);
         try {
-
             String busJSON = jsonBusURLHandler.execute().get();
             String velohJSON = jsonVelohURLHandler.execute().get();
             allBusStations = getBusStationsFromAsyncTaskResult(busJSON);
@@ -148,26 +155,9 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         } catch (ExecutionException e) {
             e.printStackTrace();
         }
-        new Thread(new Runnable() {
-            public void run() {
-                sortBusStationsByName();
-            }
-        }).start();
-
     }
 
-    private void sortBusStationsByName() {
-        Collections.sort(allBusStations, new Comparator() {
-            @Override
-            public int compare(Object softDrinkOne, Object softDrinkTwo) {
-                //use instanceof to verify the references are indeed of the type in question
-                return ((BusStation)softDrinkOne).getStationName()
-                        .compareTo(((BusStation)softDrinkTwo).getStationName());
-            }
-        });
-
-    }
-
+    //Initialise all the switches from the Navigation drawer menu
     private void createAndLoadSwitches() {
         View busSwitchView = getViewFromMenuItem(R.id.busSwitchItem);
         View velohSwitchView = getViewFromMenuItem(R.id.velohSwitchItem);
@@ -186,10 +176,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
         showMarkersOnScreen(allBusMarkers,showBusStations);
         showMarkersOnScreen(allVelohMarkers,showVelohStations);
-    }
-
-
-    private void addClickListenerToMenuItems(){
     }
 
     private View getViewFromMenuItem(int id){
@@ -216,6 +202,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         );
         AppIndex.AppIndexApi.start(client, viewAction);
 
+
     }
 
     @Override
@@ -225,34 +212,21 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "Maps Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
-                // make sure this auto-generated web page URL is correct.
-                // Otherwise, set the URL to null.
+                Action.TYPE_VIEW,
+                "Maps Page",
                 Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app deep link URI is correct.
                 Uri.parse("android-app://lu.maycrosoft.transporteit.lu/http/host/path")
         );
         AppIndex.AppIndexApi.end(client, viewAction);
         client.disconnect();
     }
 
-
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         enableMyLocation();
 
+        //change dynamically the alpha value of the markers
         mMap.setOnCameraChangeListener(new GoogleMap.OnCameraChangeListener() {
             @Override
             public void onCameraChange(CameraPosition cameraPosition) {
@@ -262,10 +236,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 float distance = (float) distanceFromTwoLatLngInKM(vr.latLngBounds.northeast, vr.latLngBounds.southwest);
                 Log.d(TAG, "distanceInMeters " + distance);
 
-                /*TODO proportional alphavalue and going to 0 when 10 km and 1 when 0.5 km
-                    check for the bachelor these and or trier height.
-                   */
-                //float alphaValue = Math.max(0,Math.min(1,(1 - distance / 50f)));
 
                 float alphaValue = 1 - map(distance, 0.5f, 50.0f, 0.0f, 1.0f);
 
@@ -276,6 +246,10 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                         oldAlphaValue = alphaValue;
                         Log.d(TAG, "alphaValue " + alphaValue);
 
+                        if(searchedMarkers.size()>0){
+                            alphaValue= alphaValue/2f;
+                        }
+
                         for (int i = 0; i < allBusMarkers.size(); i++) {
                             allBusMarkers.get(i).setAlpha(alphaValue);
 
@@ -283,11 +257,17 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                         for (int i = 0; i < allVelohMarkers.size(); i++) {
                             allVelohMarkers.get(i).setAlpha(alphaValue);
                         }
+
+                        for (int i = 0; i < searchedMarkers.size(); i++) {
+                            searchedMarkers.get(i).setAlpha(1);
+                        }
                     }
                 }
             }
         });
 
+        //This adapter for the info window uses the corresponding generated xml such that we
+        // can display the information of the buses
         mMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
 
             @Override
@@ -295,6 +275,8 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 return null;
             }
 
+
+            //get and put the businformations to the snippets of the markers.
             @Override
             public View getInfoContents(Marker marker) {
 
@@ -332,9 +314,10 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             }
         });
 
+        // This ClickListener waits for a click on a marker such that it zooms to it and it shows the info window, only triggered when the
+        // the altitude is less than 10km
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener()
         {
-
             @Override
             public boolean onMarkerClick(Marker marker) {
                 VisibleRegion vr = mMap.getProjection().getVisibleRegion();
@@ -352,7 +335,8 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
         });
 
-
+        // Long click listener of the info window used to favourise the stations,
+        // by changing the colour from red to green or red to green
         mMap.setOnInfoWindowLongClickListener(new GoogleMap.OnInfoWindowLongClickListener() {
 
             @Override
@@ -371,9 +355,12 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             }
         });
 
+        mMap.setOnMapLoadedCallback(this);
 
     }
 
+    // this function is used to map a number from one range of numbers to a new range of numbers
+    // here used to adapt the alphavalue of the markers to the corresponding altitude your a re looking at it
     private float map(float num, float input_min, float input_max, float output_min, float output_max) {
         if (num < input_min){
             num = input_min;
@@ -385,6 +372,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return ((num - input_min) * (output_max - output_min) / (input_max - input_min)) + output_min;
     }
 
+    // This information creates the string which shall be displayed in the info window later on
     private String getVelohInformationFromMarker(Marker marker){
         String velohinfo = "";
         for (int i=0; i<allVelohStations.size(); i++){
@@ -399,6 +387,8 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return velohinfo;
     }
 
+    // This information creates the string which shall be displayed in the info window later on, but first of all
+    // we use the getBusInformation method which connects to the webiste to gather the information about the bus station(marker)
     private String getBusInformationFromMarker(Marker marker){
         ArrayList<BusInformation> busInformations = new ArrayList<>();
         String busInfos = "";
@@ -431,6 +421,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return busInfos;
     }
 
+    //enable GPS location
     private void enableMyLocation() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -452,6 +443,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return false;
     }
 
+    //implementation for the switches
     @Override
     public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
         int idFromSwitch= buttonView.getId();
@@ -462,19 +454,21 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 storeBooleanValueToSharedPreferences(showBusStationPreference,isChecked);
                 break;
             case R.id.velohSwitch:
+                showMarkersOnScreen(allVelohMarkers, isChecked);
                 storeBooleanValueToSharedPreferences(showVelohStationPreference, isChecked);
                 break;
         }
     }
 
+    //set visibility of the given markers.
     private void showMarkersOnScreen(ArrayList<Marker> markers, boolean show) {
         for(Marker marker: markers){
             marker.setVisible(show);
         }
     }
 
+    //camera zoom to 2 locations
     private void zoomBetweenTwoLatLngs(LatLng latLng1, LatLng latLng2){
-
         //Boundaries from both LatLngs
         LatLngBounds.Builder builder = new LatLngBounds.Builder();
         builder.include(latLng1);
@@ -485,7 +479,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
     }
 
-
+    //Gps location permission
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
@@ -512,7 +506,6 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             mPermissionDenied = false;
         }
 
-
     }
 
     private void showMissingPermissionError() {
@@ -520,14 +513,14 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 .newInstance(true).show(getSupportFragmentManager(), "dialog");
     }
 
-
+    //add bus marker at location
     private void addBusMarkerFromLocation(LatLng coordinates, String title, String description) {
         Marker marker = mMap.addMarker(new MarkerOptions().position(coordinates).alpha(0.7f));
         marker = setMarkerTitleAndSnippet(marker, title, description);
         allBusMarkers.add(marker);
     }
 
-
+    //add veloh marker at location
     private void addVelohMarkerFromLocation(LatLng coordinates, String title, String description) {
         Marker marker = mMap.addMarker(new MarkerOptions().position(coordinates).alpha(0.7f));
         marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
@@ -535,13 +528,15 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         allVelohMarkers.add(marker);
     }
 
+    //set marker title and snippet
     private Marker setMarkerTitleAndSnippet(Marker marker, String title, String description){
         marker.setTitle(title);
         marker.setSnippet(description);
         return marker;
     }
 
-
+    // take the gathered JSON string from the Asynctask and build the busStation object and
+    // store every busStation in an ArrayList and return this
     private ArrayList<BusStation> getBusStationsFromAsyncTaskResult(String json){
         ArrayList<BusStation> busStations = new ArrayList<>();
         try {
@@ -566,6 +561,8 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return busStations;
     }
 
+    // take the gathered JSON string from the Asynctask and build the velohStation object and store
+    // every velohStation in an ArrayList and return this
     private ArrayList<VelohStation> getVelohStationsFromAsyncTaskResult(String json){
         ArrayList<VelohStation> velohStations = new ArrayList<>();
         try {
@@ -591,6 +588,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return velohStations;
     }
 
+    //calculate distance between 2 locations
     private double distanceFromTwoLatLngInKM(LatLng latLng1, LatLng latLng2){
         double lat1=latLng1.latitude;
         double lat2=latLng2.latitude;
@@ -611,44 +609,24 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return R * c;
     }
 
-
-    private void storeIntValueToSharedPreferences(String key, int value){
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putInt(key, value);
-        editor.apply();
-    }
-
+    // store boolean variable to sharedprefences
     private void storeBooleanValueToSharedPreferences(String key, boolean value){
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putBoolean(key, value);
         editor.commit();
     }
 
-    private void storeFloatValueToSharedPreferences(String key, float value){
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putFloat(key, value);
-        editor.apply();
-    }
-
-    private int getIntValueFromSharedPreferences(String key, int defaultValue){
-        SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
-        return sharedPref.getInt(key, defaultValue);
-    }
-
+    // get boolean variable from sharedprefences
     private boolean getBooleanValueFromSharedPreferences(String key, boolean defaultValue){
         SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
         return sharedPref.getBoolean(key, defaultValue);
 
     }
 
-    private float getFloatValueFromSharedPreferences(String key, float defaultValue){
-        SharedPreferences sharedPref = this.getPreferences(Context.MODE_PRIVATE);
-        return sharedPref.getFloat(key, defaultValue);
-    }
-
-
+    //A listener which gets called on postexecute when finished downloading the busStations
     @Override
     public void finishedBusDownload() {
+
         LatLng coordinateMarker;
         Log.d(TAG,"finishedVelohDownload");
         for(BusStation busStation: allBusStations){
@@ -658,6 +636,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         Log.d(TAG,"finishedVelohDownload size "+ allBusMarkers.size());
     }
 
+    //A listener which gets called on postexecute when finished downloading the velohStations
     @Override
     public void finishedVelohDownload() {
         LatLng coordinateMarker;
@@ -669,10 +648,9 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         Log.d(TAG,"finishedVelohDownload size "+ allVelohMarkers.size());
     }
 
+    //Find ALL busstations which have a lower distance than the given radius
     private ArrayList<BusStation> findBusStationsInRadius(LatLng currentLocation, double radius){
-
         ArrayList<BusStation> busStationsInRadius = new ArrayList<>();
-
         double distance;
         for (BusStation busStation:allBusStations){
             distance = distanceFromTwoLatLngInKM(currentLocation, busStation.getLatLng());
@@ -680,14 +658,12 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 busStationsInRadius.add(busStation);
             }
         }
-
         return busStationsInRadius;
     }
 
+    //Find ALL veloh which have a lower distance than the given radius
     private ArrayList<VelohStation> findVelohStationsInRadius(LatLng currentLocation, double radius){
-
         ArrayList<VelohStation> velohStationsInRadius = new ArrayList<>();
-
         double distance;
         for (VelohStation velohStation:allVelohStations){
             distance = distanceFromTwoLatLngInKM(currentLocation, velohStation.getLatLng());
@@ -695,13 +671,16 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 velohStationsInRadius.add(velohStation);
             }
         }
-
         return velohStationsInRadius;
     }
 
-    private ArrayList<BusStation> findClosestBusStations(LatLng currentLocation, int amount){
+    //Find closest Bus station(s) from the given location
+    // This algorithm is a bit complicated but it is very optimised.
+    // We only look for the n best (closest) stations and do NOT sort.
+    // Because sorting takes more than 10 seconds and this optimised algo takes < 1 second.
+    private ArrayList<BusStation> findClosestBusStations(ArrayList<BusStation> busStations, LatLng currentLocation, int amount){
         double distance1, distance2;
-        ArrayList<BusStation> tempBusStations = allBusStations;
+        ArrayList<BusStation> tempBusStations = busStations;
         ArrayList<BusStation> closestBusStations = new ArrayList<>();
         ArrayList<Double> distances = new ArrayList<>();
         //calculate the first (amount) of distances
@@ -740,6 +719,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return closestBusStations;
     }
 
+    //get closest Veloh Station(s)
     private ArrayList<VelohStation> findClosestVelohStations(LatLng currentLocation, int amount){
         ArrayList<VelohStation> tempVelohStations;
         tempVelohStations = sortVelohStationsByDistance(currentLocation, allVelohStations);
@@ -752,6 +732,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return closestVelohStations;
     }
 
+    //sort bus stations by distance
     private ArrayList<BusStation> sortBusStationsByDistance(LatLng currentLocation, ArrayList<BusStation> busStations){
         BusStation temp;
         double distance1, distance2;
@@ -772,6 +753,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return busStations;
     }
 
+    //sort veloh stations by distance
     private ArrayList<VelohStation> sortVelohStationsByDistance(LatLng currentLocation, ArrayList<VelohStation> velohStations){
         VelohStation temp;
         double distance1, distance2;
@@ -790,26 +772,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return velohStations;
     }
 
-    private ArrayList<Station> sortStationsByDistance(LatLng currentLocation, ArrayList<Station> stations){
-        Station temp;
-        double distance1, distance2;
-
-        for(int i=1; i<stations.size(); i++){
-            for(int j=0; j<stations.size()-i; j++){
-                distance1 = distanceFromTwoLatLngInKM(stations.get(j).getLatLng(),currentLocation);
-                distance2 = distanceFromTwoLatLngInKM(stations.get(j+1).getLatLng(),currentLocation);
-                if(distance1>distance2) {
-                    temp=stations.get(j);
-                    stations.set(j,stations.get(j+1));
-                    stations.set(j+1,temp);
-                }
-            }
-        }
-        return stations;
-    }
-
-
-
+    //an alert dialog where the user defines the maximum distance to busStations
     private void showScanInRadiusAlertDialog(){
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         LinearLayout linear=new LinearLayout(this);
@@ -845,11 +808,23 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 if(mMap.isMyLocationEnabled()){
                     LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude());
                     double radius = (double)slider.getProgress()/(double)50;
+                    if(circle == null){
+                        drawCircle(currentLocation,radius*1000);
+                    }else{
+                        circle=null;
+                        drawCircle(currentLocation,radius*1000);
+                    }
                     ArrayList<BusStation> foundBusStations = findBusStationsInRadius(currentLocation, radius);
+                    setMarkerColorsOfBusStations(foundBusStations);
                     Log.d(TAG, "amount of busstations found : " +foundBusStations.size());
                     ArrayList<VelohStation> foundVelohStations = findVelohStationsInRadius(currentLocation, radius);
                     Log.d(TAG, "amount of velohStations found : " +foundVelohStations.size());
-                    //TODO Show the markers of those busStations/velohStations in a better way ( other color for example)
+                    setMarkerColorsOfVelohStations(foundVelohStations);
+
+
+                    searchedMarkers =getMarkersOfBusStations(foundBusStations);
+                    searchedMarkers.addAll(getMarkersOfVelohStations(foundVelohStations));
+
                     zoomToLatLngWithRadius(currentLocation, radius);
                 }
             }
@@ -862,16 +837,23 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         builder.show();
     }
 
+    //zoom to location with a given radius
     private void zoomToLatLngWithRadius(LatLng currentLocation, double radius) {
         LatLng leftTop = new LatLng(currentLocation.latitude - (0.0001 * (radius /0.010)),currentLocation.longitude - (0.0001 * (radius /0.010)));
         LatLng rightBottom = new LatLng(currentLocation.latitude + (0.0001 * (radius /0.010)),currentLocation.longitude + (0.0001 * (radius /0.010)));
         zoomBetweenTwoLatLngs(leftTop,rightBottom);
     }
 
-
-
+    //Implementations of the selected menuitem of the navigation drawer
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+
+        if(circle!=null){
+            circle.remove();
+        }
+
+        setAllBusMarkerColors();
+
 
         switch (item.getItemId()){
             case R.id.buttonScanInRadius:
@@ -888,12 +870,16 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
             case R.id.buttonFavorites:
                 showFavouritesDialog();
                 break;
+            case R.id.buttonDesiredDestination:
+                showRouteToAlertDialog();
+                break;
         }
+        DrawerLayout drawerLayout=(DrawerLayout) findViewById(R.id.drawer_layout);
+        drawerLayout.closeDrawers();
         return true;
     }
 
-
-
+    //alert dialog for closest Stations
     private void showScanNearestAlertDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         LinearLayout linear=new LinearLayout(this);
@@ -962,11 +948,16 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                     if(amountBusStations + amountVelohStations == 0){
                         return;
                     }
-                    ArrayList<BusStation> foundBusStations = findClosestBusStations(currentLocation, amountBusStations);
+                    ArrayList<BusStation> foundBusStations = findClosestBusStations(allBusStations,currentLocation, amountBusStations);
                     Log.d(TAG, "amount of busstations found : " +foundBusStations.size());
+                    setMarkerColorsOfBusStations(foundBusStations);
 
                     ArrayList<VelohStation> foundVelohStations = findClosestVelohStations(currentLocation, amountVelohStations);
                     Log.d(TAG, "amount of velohStations found : " +foundVelohStations.size());
+                    setMarkerColorsOfVelohStations(foundVelohStations);
+
+                    searchedMarkers =getMarkersOfBusStations(foundBusStations);
+                    searchedMarkers.addAll(getMarkersOfVelohStations(foundVelohStations));
 
                     ArrayList<LatLng> latLngs  = new ArrayList<LatLng>();
                     for (int i = 0; i < amountBusStations; i++){
@@ -994,7 +985,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
     }
 
-
+    // get north south east west borders of several Locations to get a Border
     private ArrayList<LatLng> getBordersOfLatLngs(ArrayList<LatLng> latLngs){
         double west, north, east, south;
         west = east = latLngs.get(0).longitude;
@@ -1013,29 +1004,39 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
     }
 
+    //initialize all colors of the Bus markers to RED
     private void setAllBusMarkerColors(){
         for (Marker marker: allBusMarkers){
             marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
         }
+        for (Marker marker:favourites){
+            marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+        }
     }
 
+    //initialize all colors of the Veloh markers to blue
     private void setAllVelohMarkerColors(){
         for (Marker marker: allVelohMarkers){
             marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
         }
+        for (Marker marker:favourites){
+            marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+        }
     }
 
+    //set color of searched busStations
     private void setMarkerColorsOfBusStations(ArrayList<BusStation> busStations){
         Marker marker;
         for (BusStation busStation : busStations){
             marker = getMarkerOfBusStation(busStation);
             if(marker!=null){
-                marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW));
+                marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA));
                 marker.setAlpha(1);
             }
         }
     }
 
+    //get marker of the bus station
     private Marker getMarkerOfBusStation(BusStation busStation){
         for (Marker marker: allBusMarkers){
             if(marker.getPosition().equals(busStation.getLatLng())){
@@ -1045,18 +1046,45 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return null;
     }
 
+    private ArrayList<Marker> getMarkersOfBusStations(ArrayList<BusStation> busStations){
+        ArrayList<Marker> markers = new ArrayList<>();
+        for(BusStation station: busStations) {
+            for (Marker marker : allBusMarkers) {
+                if (marker.getPosition().equals(station.getLatLng())) {
+                    markers.add(marker);
+                    break;
+                }
+            }
+        }
+        return markers;
+    }
+
+    private ArrayList<Marker> getMarkersOfVelohStations(ArrayList<VelohStation> velohStations){
+        ArrayList<Marker> markers = new ArrayList<>();
+        for(VelohStation station: velohStations) {
+            for (Marker marker : allVelohMarkers) {
+                if (marker.getPosition().equals(station.getLatLng())) {
+                    markers.add(marker);
+                    break;
+                }
+            }
+        }
+        return markers;
+    }
+
+    //set color of velohstations
     private void setMarkerColorsOfVelohStations(ArrayList<VelohStation> velohStations){
         for (VelohStation busStation : velohStations){
             for (Marker marker: allVelohMarkers){
                 if(marker.getPosition().equals(busStation.getLatLng())){
-                    marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+                    marker.setIcon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE));
                     marker.setAlpha(1);
                 }
             }
         }
     }
 
-
+    //alert dialog for searching for a specific bus station
     private void showSearchAlertDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
@@ -1083,12 +1111,14 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         builder.setPositiveButton("Search", new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int id) {
                 LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude());
-                //TODO zoom to this location
                 BusStation searchedBusStation  = getBusStationWithStationName(textView.getEditableText().toString());
                 Marker busMarker = getMarkerOfBusStation(searchedBusStation);
+                ArrayList<BusStation> busstations = new ArrayList<BusStation>();
+                busstations.add(searchedBusStation);
+                searchedMarkers =getMarkersOfBusStations(busstations);
+                setMarkerColorsOfBusStations(busstations);
                 busMarker.showInfoWindow();
                 zoomBetweenTwoLatLngs(currentLocation, searchedBusStation.getLatLng());
-
             }
         });
         builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
@@ -1107,7 +1137,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         dialog.show();
     }
 
-
+    // get all the station names of all the busstations
     private ArrayList<String> getStationNames() {
         ArrayList<String> stationNames = new ArrayList<>();
 
@@ -1118,7 +1148,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return stationNames;
     }
 
-
+    //get the busstation with the given station Name
     private BusStation getBusStationWithStationName(String stationName){
         for (BusStation busStation : allBusStations){
             if (busStation.getStationName().equals(stationName)){
@@ -1128,8 +1158,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return null;
     }
 
-
-
+    //alert dialog to select a favourite show on the map
     private void showFavouritesDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         AlertDialog dialog;
@@ -1143,7 +1172,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                 public void onClick(DialogInterface dialog, int id) {
                 }
             });
-             dialog = builder.create();
+            dialog = builder.create();
         }else {
 
             LinearLayout linear = new LinearLayout(this);
@@ -1168,10 +1197,17 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
                     LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(), mMap.getMyLocation().getLongitude());
                     //TODO zoom to this location
                     BusStation searchedBusStation = getBusStationWithStationName(spinner.getSelectedItem().toString());
-                    Marker busMarker = getMarkerOfBusStation(searchedBusStation);
-                    busMarker.showInfoWindow();
-                    zoomBetweenTwoLatLngs(currentLocation, searchedBusStation.getLatLng());
+                    if(searchedBusStation!=null) {
+                        Marker busMarker = getMarkerOfBusStation(searchedBusStation);
+                        ArrayList<BusStation> busstations = new ArrayList<BusStation>();
+                        busstations.add(searchedBusStation);
 
+                        searchedMarkers = getMarkersOfBusStations(busstations);
+
+                        setMarkerColorsOfBusStations(busstations);
+                        busMarker.showInfoWindow();
+                        zoomBetweenTwoLatLngs(currentLocation, searchedBusStation.getLatLng());
+                    }
                 }
             });
             builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
@@ -1192,7 +1228,7 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
 
     }
 
-
+    //get Station Names of the given markers.
     private ArrayList<String> getStationNamesOfMarkers(ArrayList<Marker> markers){
         ArrayList<String> stationNames = new ArrayList<>();
 
@@ -1203,4 +1239,95 @@ public class MapActivity extends FragmentActivity implements OnMapReadyCallback,
         return stationNames;
     }
 
+
+    //alert dialog for searching for a specific bus station
+    private void showRouteToAlertDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        LinearLayout linear = new LinearLayout(this);
+        linear.setOrientation(LinearLayout.VERTICAL);
+        final AutoCompleteTextView textView = new AutoCompleteTextView(this);
+        textView.setTextSize(20);
+        textView.setHint("City, Street");
+        textView.setGravity(Gravity.CENTER);
+
+        ArrayList<String> stationNames = getStationNames();
+
+
+        ArrayAdapter adapter = new
+                ArrayAdapter(this, android.R.layout.simple_list_item_1, stationNames);
+
+        textView.setAdapter(adapter);
+        textView.setThreshold(1);
+        textView.setDropDownHeight(800);
+
+        linear.addView(textView);
+        builder.setView(linear);
+        builder.setTitle("Route to Station");
+        builder.setPositiveButton("Search", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude());
+                BusStation searchedBusStation  = getBusStationWithStationName(textView.getEditableText().toString());
+
+                Marker busMarker = getMarkerOfBusStation(searchedBusStation);
+                ArrayList<BusInformation> busInformations;
+                busInformations = searchedBusStation.getBusInformations();
+
+                ArrayList<BusStation> destinationBusStations = new ArrayList<BusStation>();
+
+                for(BusInformation busInformation : busInformations){
+                    String destination = busInformation.getDestinationStationName();
+                    destinationBusStations.add(getBusStationWithStationName(destination));
+                }
+                if(destinationBusStations==null||destinationBusStations.size()<1){
+                    return;
+                }else{
+                    ArrayList<BusStation> closestBusStation = findClosestBusStations(destinationBusStations,currentLocation,1);
+                    Marker closestStationMarker = getMarkerOfBusStation(closestBusStation.get(0));
+                    setMarkerColorsOfBusStations(closestBusStation);
+
+                    searchedMarkers =getMarkersOfBusStations(closestBusStation);
+
+                    closestStationMarker.showInfoWindow();
+                    zoomBetweenTwoLatLngs(currentLocation, closestBusStation.get(0).getLatLng());
+                }
+
+
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+            }
+        });
+
+
+        AlertDialog dialog = builder.create();
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        WindowManager.LayoutParams wmlp = dialog.getWindow().getAttributes();
+
+        wmlp.gravity = Gravity.TOP | Gravity.LEFT;
+        wmlp.y = 100;   //y position
+        dialog.getWindow().setAttributes(wmlp);
+        dialog.show();
+    }
+
+
+    @Override
+    public void onMapLoaded() {
+        LatLng currentLocation = new LatLng(mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude());
+        zoomToLatLngWithRadius(currentLocation, 3);
+    }
+
+
+
+
+
+    private void drawCircle(LatLng position, double radius){
+        int strokeColor = 0xffA9E1E1; //red outline
+        int shadeColor = 0x44CCFFFF; //opaque red fill
+
+        CircleOptions circleOptions = new CircleOptions().center(position).radius(radius).fillColor(shadeColor).strokeColor(strokeColor).strokeWidth(8);
+        circle = mMap.addCircle(circleOptions);
+
+    }
 }

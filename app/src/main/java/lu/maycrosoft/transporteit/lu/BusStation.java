@@ -8,7 +8,10 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 
 /**
- * Created by joemayer on 10/12/2016.
+ * The BusStation class inherits again the main properties of the Station class and
+ * adds the method getBusInformations, which collects all the bus information for this specific
+ * busStation and calls the AsyncTask which handles the gathering of this information
+ *
  */
 
 public class BusStation extends Station{

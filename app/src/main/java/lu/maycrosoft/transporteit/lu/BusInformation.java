@@ -3,7 +3,8 @@ package lu.maycrosoft.transporteit.lu;
 import java.util.ArrayList;
 
 /**
- * Created by joemayer on 13/12/2016.
+ * This class handles the structure of the bus information, it has a busline, times and a destination name
+ *
  */
 
 public class BusInformation {

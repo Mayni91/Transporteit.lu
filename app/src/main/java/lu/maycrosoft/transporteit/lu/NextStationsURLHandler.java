@@ -20,7 +20,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Created by joemayer on 13/12/2016.
+ * This class handles all connections in the background which are called when the user interacts with a marker,
+ * such that he can be shown all the concerned information of the selected busstation.
+ * This information is called over tha API url with a given ID of a station.
+ * This is again done by an AsyncTask such that we can assure that the application stays responsive.
+ *
  */
 
 public class NextStationsURLHandler extends AsyncTask<Void, Void, ArrayList<BusInformation>> {
@@ -40,6 +44,7 @@ public class NextStationsURLHandler extends AsyncTask<Void, Void, ArrayList<BusI
         String content = "";
 
         try {
+            id=id.replaceAll(" ","%20");
             URL url = new URL("http://travelplanner.mobiliteit.lu/restproxy/departureBoard?accessId=cdt&format=json&id="+id);
 
             urlConnection = (HttpURLConnection) url.openConnection();

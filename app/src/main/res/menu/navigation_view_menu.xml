@@ -2,18 +2,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
 
-    <item android:title="Options">
-    <menu>
-
-        <item
-            android:id="@+id/buttonSettings"
-            android:title="Settings" />
-        <item
-            android:id="@+id/buttonFavorites"
-            android:title="Favorites" />
-    </menu>
-    </item>
-
     <item android:title="Enable/Disable Stations">
         <menu>
 
@@ -39,6 +27,9 @@
 
     <item android:title="Search for Station">
         <menu>
+            <item
+                android:id="@+id/buttonFavorites"
+                android:title="Favorites" />
 
             <item
                 android:id="@+id/buttonSearch"
@@ -54,7 +45,7 @@
 
             <item
                 android:id="@+id/buttonScanNearest"
-                android:title="Scan neareast Stations" />
+                android:title="Scan closest Stations" />
         </menu>
     </item>
 

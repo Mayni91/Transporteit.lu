@@ -3,7 +3,9 @@ package lu.maycrosoft.transporteit.lu;
 import com.google.android.gms.maps.model.LatLng;
 
 /**
- * Created by joemayer on 13/12/2016.
+ *
+ * This class handles the structure of the  veloh stations, takes the main properties of the parent class Station and adds an id and an address
+ *
  */
 
 public class VelohStation extends Station{
