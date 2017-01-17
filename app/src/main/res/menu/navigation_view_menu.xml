@@ -1,0 +1,52 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+
+    <item android:title="Enable/Disable Stations">
+        <menu>
+
+            <item
+                android:id="@+id/busSwitchItem"
+                app:actionLayout="@layout/bus_switch"
+                android:title="Bus" />
+            <item
+                android:id="@+id/velohSwitchItem"
+                app:actionLayout="@layout/veloh_switch"
+                android:title="Veloh" />
+        </menu>
+    </item>
+
+    <item android:title="Desired destination route">
+        <menu>
+
+            <item
+                android:id="@+id/buttonDesiredDestination"
+                android:title="Get route" />
+        </menu>
+    </item>
+
+    <item android:title="Search for Station">
+        <menu>
+            <item
+                android:id="@+id/buttonFavorites"
+                android:title="Favorites" />
+
+            <item
+                android:id="@+id/buttonSearch"
+                android:title="Search" />
+        </menu>
+    </item>
+
+    <item android:title="Scan Stations">
+        <menu>
+            <item
+                android:id="@+id/buttonScanInRadius"
+                android:title="Scan in Radius" />
+
+            <item
+                android:id="@+id/buttonScanNearest"
+                android:title="Scan closest Stations" />
+        </menu>
+    </item>
+
+</menu>

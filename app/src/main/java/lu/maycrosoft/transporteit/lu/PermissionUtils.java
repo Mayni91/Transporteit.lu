@@ -10,10 +10,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.DialogFragment;
 import android.widget.Toast;
 
-/**
- * Created by Nic on 22/11/2016.
- */
-
 public abstract class PermissionUtils {
 
     /**

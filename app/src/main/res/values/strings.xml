@@ -4,4 +4,6 @@
     <string name="location_permission_denied">Location permission denied</string>
     <string name="permission_required_toast">Permission requires toast</string>
     <string name="permission_rationale_location">Permission rationale location</string>
+    <string name="preference_file_key">lu.maycrosoft.transporteit.lu.mypreferences</string>
+
 </resources>
